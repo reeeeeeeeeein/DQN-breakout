@@ -30,7 +30,8 @@ class Agent(object):
             eps_final: float,
             eps_decay: float,
             restore: Optional[str] = None,
-            EPSILON: float=0.01,
+
+
     ) -> None:
         self.__action_dim = action_dim
         self.__device = device
@@ -39,7 +40,6 @@ class Agent(object):
         self.__eps_start = eps_start
         self.__eps_final = eps_final
         self.__eps_decay = eps_decay
-        self.__EPSILON = EPSILON
 
         self.__eps = eps_start
         self.__r = random.Random()
@@ -73,14 +73,15 @@ class Agent(object):
 
     def learn(self, memory: ReplayMemory, batch_size: int) -> float:
         """learn trains the value network via TD-learning."""
-        state_batch, action_batch, reward_batch, next_batch, done_batch = \
+        state_batch, action_batch, reward_batch, next_batch,weight_batch, done_batch = \
             memory.sample(batch_size)
-
+       # print(weight_batch,'\n')
+        #print(reward_batch,'\n')
         values = self.__policy(state_batch.float()).gather(1, action_batch)
         values_next = self.__target(next_batch.float()).max(1).values.detach()
         expected = (self.__gamma * values_next.unsqueeze(1)) * \
             (1. - done_batch) + reward_batch
-        loss = F.smooth_l1_loss(values, expected)
+        loss = F.smooth_l1_loss(values, expected)*weight_batch.mean()
 
         self.__optimizer.zero_grad()
         loss.backward()
@@ -97,7 +98,7 @@ class Agent(object):
             values_next = self.__target(nextstate.float()).max(1).values.detach()
             expected = (self.__gamma * values_next.unsqueeze(1)) * \
                 (1. - done) + reward
-            return abs(expected-values)+self.__EPSILON
+            return expected-values
 
     def sync(self) -> None:
         """sync synchronizes the weights from the policy network to the target

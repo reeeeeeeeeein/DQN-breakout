@@ -268,3 +268,15 @@ class treearray:
 
 此外，ReplayMemory类也要进行相应的修改，由于篇幅所限，这里不再赘述 。
 
+经测试，使用了优先经验回放之后运行速度差了几倍，在训练次数相同的情况下，模型的表现并不比没有原始版本强多少。这是优先经验回放版本：
+
+![image-20201113212325996](https://gitee.com/zhang_jing_run/picture_bed/raw/master/null/image-20201113212325996.png)
+
+这是原始版本：
+
+![image-20201113212351854](https://gitee.com/zhang_jing_run/picture_bed/raw/master/null/image-20201113212351854.png)
+
+也就是说，在训练时间相同的情况下，优先经验回放的效果还不如原始版本，这让我开始怀疑人生。分析了一下，可能有如下几个原因：
+
+1. Memory数量太多，而 policy network 的训练时很频繁的，也就是说很多经验的优先级可能是在很久以前生成，导致结果不准确，而如果经常更新Memory的优先级又显得很浪费时间，所以可以把Memory调小一点。
+2. 

@@ -10,6 +10,7 @@ from utils_types import (
     BatchNext,
     BatchReward,
     BatchState,
+    BatchWeight,
     TensorStack5,
     TorchDevice,
 )
@@ -49,6 +50,9 @@ class treearray:
         #print(val,nowval)
         self.add(loc, val - nowval)
 
+    def get_minval(self,size):
+        return self.__array[1:size].min()
+
     def search(self):
         # 进行采样
         sub_val = (1 << (self.__bits - 1))
@@ -63,7 +67,7 @@ class treearray:
             else:
                 right_val -= left_val
             sub_val //= 2
-        return right
+        return right-1,right_val
 
 
 class ReplayMemory(object):
@@ -72,12 +76,19 @@ class ReplayMemory(object):
             channels: int,
             capacity: int,
             device: TorchDevice,
+            EPSILON: float = 0.01,
+            ALPHA:float=0.6,
+            BETA: float = 0.4,
+            BETA_INC:float =0.001
     ) -> None:
         self.__device = device
         self.__capacity = capacity
         self.__size = 0
         self.__pos = 0
-
+        self.__ALPHA=ALPHA
+        self.__BETA=BETA
+        self.__BETA_INC=BETA_INC
+        self.__EPSILON=EPSILON
         self.__m_states = torch.zeros(
             (capacity, channels, 84, 84), dtype=torch.uint8)
         self.__m_actions = torch.zeros((capacity, 1), dtype=torch.long)
@@ -105,7 +116,8 @@ class ReplayMemory(object):
         b_done = self.__m_dones[indices].to(self.__device).float()
         pri_val=agent.get_pri_val(b_state, b_action, b_reward, b_done, b_next)
         pri_val=pri_val.cpu().reshape((1))
-        print(pri_val,b_reward)
+        pri_val=math.pow(abs(pri_val)+self.__EPSILON,self.__ALPHA)
+        #print(pri_val,b_reward)
         self.__treearray.change(self.__pos+1,pri_val)
         self.__pos = (self.__pos + 1) % self.__capacity
         self.__size = max(self.__size, self.__pos)
@@ -115,15 +127,21 @@ class ReplayMemory(object):
         BatchAction,
         BatchReward,
         BatchNext,
+        BatchWeight,
         BatchDone,
     ]:
-        indices = [self.__treearray.search()-1 for i in range(batch_size)]#torch.randint(0, high=self.__size, size=(batch_size,))
+        self.__BETA=np.min([1.0,self.__BETA+self.__BETA_INC])
+        temp = np.array([self.__treearray.search() for i in range(batch_size)])#torch.randint(0, high=self.__size, size=(batch_size,))
+        indices=temp[:,0];pri_vals=torch.Tensor(temp[:,1])
         b_state = self.__m_states[indices, :4].to(self.__device).float()
         b_next = self.__m_states[indices, 1:].to(self.__device).float()
         b_action = self.__m_actions[indices].to(self.__device)
         b_reward = self.__m_rewards[indices].to(self.__device).float()
+        min_pri=max(self.__treearray.get_minval(self.__size),0.0001)
+        b_weight=(pri_vals/min_pri).pow(-self.__BETA)
+        #print(pri_vals[0],min_pri,b_weight[0],'\n')
         b_done = self.__m_dones[indices].to(self.__device).float()
-        return b_state, b_action, b_reward, b_next, b_done
+        return b_state, b_action, b_reward, b_next, b_weight,b_done
 
     def __len__(self) -> int:
         return self.__size

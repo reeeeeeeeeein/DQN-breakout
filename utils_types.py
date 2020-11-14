@@ -13,6 +13,7 @@ BatchAction = Any
 # Tensor with shape (None, 1)
 BatchReward = Any
 # Tensor with shape (None, 4, 84, 84)
+BatchWeight = Any
 BatchNext = Any
 # Tensor with shape (None, 1)
 BatchDone = Any
