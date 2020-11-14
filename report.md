@@ -2,6 +2,7 @@
 
 ## 分析代码
 
+### 主干部分
 代码的主要部分是main.py中的for循环：
 
 ```python
@@ -190,6 +191,28 @@ class DQN(nn.Module):
 
 由三个卷积层和两个全连接层构成，卷积核的大小分别为 8、4、3，stride为 4、2、1，通道数为 32,64,64；激活函数为 relu，最后输出action_dim个值表示不同action的得分。
 
+### 其它部分：
+
++ utils_types.py中定义了很多变量类型，但都赋为了typing中的Any类。Any类型可以执行任何操作或方法调用，并将其赋值给任何变量。这样做仅是对程序员的一种提醒，方便程序员在其它文件中审慎地使用类型，而不会对静态检查有影响。
+
++ utils_memory.py中初始化即固定记忆容量，分配好空间。
+
+
++ utils_model.py的init_weights中使用了kaiming初始化方法，不知道具体怎么实现，可能是一种优化手段。
++ utils_drl.py中
+
+  + 优化器使用的是Adam优化算法，学习率为0.0000625，较小。
+  + save只是个调用torch.save的接口。
++ utils_env.py
+
+  + 初始化使用了atari中的方法。
+  + reset调用底层gym方法，并预先往前走底层step方法参数为0的5步（按注释这样的动作应该没有任何操作），这一步使初始观测队列非空，使后续main中的make_state可以顺利进行。
+  + step同样调用底层gym方法。
+  + get_frame是进行渲染的，只在RENDER为真时被调用，而main中RENDER为False（有很多相关代码，但都没有被调用）。make_folded_state创建HTML文件并利用IPython来播放MP4视频，并没有被调用。
+  + to_tensor，get_action_dim，get_action_meanings，get_eval_lives是一些辅助小函数。
+  + make_state，make_folded_state都是根据观测队列返回状态，前者返回5个，后者返回4个。
+  + evaluate函数利用现有模型进行多次试运行（默认5*3=15次），返回平均效果
+
 ## 使用优先经验回放
 
 参考 [这篇博客](https://www.cnblogs.com/pinard/p/9797695.html) 的做法，给memory设置优先级，给TD误差大的经验回放更高的优先级。具体做法是使用[树状数组](https://blog.csdn.net/SuaSUA_He/article/details/102512139):
@@ -231,10 +254,10 @@ class treearray:
         while loc < self.__max_len:
             self.__array[loc] += val
             loc += loc & (-loc)
-
+    
     def get_array(self):
         return self.__array
-
+    
     def get_prefix_sum(self, loc):
         # 得到一个前loc个值的和
         val = 0
@@ -242,13 +265,13 @@ class treearray:
             val += self.__array[loc]
             loc -= loc & (-loc)
         return val
-
+    
     def change(self, loc, val):
         # 单点修改，不过要先查询之前的值才能加上去
         nowval = self.get_prefix_sum(loc) - self.get_prefix_sum(loc - 1)
         #print(val,nowval)
         self.add(loc, val - nowval)
-
+    
     def search(self):
         # 进行采样
         sub_val = (1 << (self.__bits - 1))
