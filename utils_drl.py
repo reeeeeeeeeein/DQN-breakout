@@ -75,13 +75,14 @@ class Agent(object):
         """learn trains the value network via TD-learning."""
         state_batch, action_batch, reward_batch, next_batch,weight_batch, done_batch = \
             memory.sample(batch_size)
+        weight_batch=weight_batch.to(self.__device)
        # print(weight_batch,'\n')
         #print(reward_batch,'\n')
         values = self.__policy(state_batch.float()).gather(1, action_batch)
         values_next = self.__target(next_batch.float()).max(1).values.detach()
         expected = (self.__gamma * values_next.unsqueeze(1)) * \
             (1. - done_batch) + reward_batch
-        loss = F.smooth_l1_loss(values, expected)*weight_batch.mean()
+        loss = F.smooth_l1_loss(values*weight_batch, expected*weight_batch)
 
         self.__optimizer.zero_grad()
         loss.backward()
